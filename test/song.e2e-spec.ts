@@ -69,4 +69,16 @@ describe('Song E2E', () => {
 
     expect(res.statusCode).toBe(401);
   });
+
+  it('create with missing album returns 404', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/songs',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { title: 'x', audioUrl: '/x.mp3', albumId: 999 },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect((JSON.parse(res.payload) as { message: string }).message).toBe('Album not found: 999');
+  });
 });

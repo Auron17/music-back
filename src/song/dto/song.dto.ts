@@ -8,7 +8,7 @@ export class SongUpsertDto {
 
   @IsOptional()
   @IsInt()
-  albumId?: number;
+  albumId?: number | null;
 
   @IsOptional()
   @IsInt()

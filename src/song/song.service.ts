@@ -100,10 +100,11 @@ export class SongService {
       throw new NotFoundException('Artist not configured');
     }
 
+    const albumId = await this.resolveAlbumId(dto.albumId);
     const song = await this.prisma.song.create({
       data: {
         artistId: artist.id,
-        albumId: dto.albumId ? BigInt(dto.albumId) : null,
+        albumId,
         title: dto.title,
         durationSeconds: dto.durationSeconds,
         audioUrl: dto.audioUrl,
@@ -119,12 +120,14 @@ export class SongService {
 
   async update(id: bigint, dto: SongUpsertDto): Promise<SongResponse> {
     await this.assertExists(id);
+    const albumId =
+      dto.albumId === undefined ? undefined : await this.resolveAlbumId(dto.albumId);
 
     const song = await this.prisma.song.update({
       where: { id },
       data: {
         title: dto.title,
-        albumId: dto.albumId === undefined ? undefined : dto.albumId ? BigInt(dto.albumId) : null,
+        albumId,
         durationSeconds: dto.durationSeconds,
         audioUrl: dto.audioUrl,
         coverImageUrl: dto.coverImageUrl,
@@ -146,6 +149,20 @@ export class SongService {
     await this.assertExists(id);
     const song = await this.prisma.song.update({ where: { id }, data: { sortOrder } });
     return this.serialize(song);
+  }
+
+  private async resolveAlbumId(albumId: number | null | undefined): Promise<bigint | null> {
+    if (albumId == null) {
+      return null;
+    }
+
+    const id = BigInt(albumId);
+    const exists = await this.prisma.album.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) {
+      throw new NotFoundException(`Album not found: ${albumId}`);
+    }
+
+    return id;
   }
 
   private async assertExists(id: bigint): Promise<void> {
