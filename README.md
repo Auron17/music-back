@@ -52,6 +52,17 @@ npm run start:dev
 
 Server runs on `PORT` from `.env`, default `8080`.
 
+## Render Deploy
+
+Use these settings on Render:
+
+```bash
+Build Command: npm ci && npm run render:build
+Start Command: npm run start
+```
+
+`npm run start` runs compiled production code from `dist/src/main.js`. Do not use `nest start` on Render because it compiles at runtime and can exceed the memory limit.
+
 ## Endpoints
 
 - `POST /api/v1/auth/login` - public
