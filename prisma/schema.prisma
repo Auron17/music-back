@@ -68,12 +68,27 @@ model Song {
 
   artist Artist? @relation(fields: [artistId], references: [id], onDelete: SetNull)
   album  Album?  @relation(fields: [albumId], references: [id], onDelete: SetNull)
+  likes  SongLike[]
 
   @@index([isActive, sortOrder, createdAt(sort: Desc)])
   @@index([isActive, playCount(sort: Desc)])
   @@index([albumId, isActive, sortOrder])
   @@index([title])
   @@map("songs")
+}
+
+model SongLike {
+  id        BigInt   @id @default(autoincrement())
+  songId    BigInt   @map("song_id")
+  deviceId  String   @map("device_id") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, songId])
+  @@index([deviceId, createdAt(sort: Desc)])
+  @@index([songId])
+  @@map("song_likes")
 }
 
 model Video {

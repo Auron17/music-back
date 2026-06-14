@@ -39,6 +39,12 @@ interface PageResponse<T> {
   totalPages: number;
 }
 
+interface SongLikeResponse {
+  songId: number;
+  deviceId: string;
+  liked: boolean;
+}
+
 @Injectable()
 export class SongService {
   constructor(private readonly prisma: PrismaService) {}
@@ -92,6 +98,51 @@ export class SongService {
       page,
       size,
     );
+  }
+
+  async likedByDevice(
+    deviceId: string,
+    page = 0,
+    size = 20,
+  ): Promise<PageResponse<SongResponse>> {
+    const take = Math.min(Math.max(size, 1), 100);
+    const safePage = Math.max(page, 0);
+    const skip = safePage * take;
+    const where: Prisma.SongLikeWhereInput = { deviceId, song: { isActive: true } };
+    const [total, likes] = await Promise.all([
+      this.prisma.songLike.count({ where }),
+      this.prisma.songLike.findMany({
+        where,
+        include: { song: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+    ]);
+
+    return {
+      content: likes.map((like) => this.serialize(like.song)),
+      page: safePage,
+      size: take,
+      totalElements: total,
+      totalPages: Math.ceil(total / take),
+    };
+  }
+
+  async like(id: bigint, deviceId: string): Promise<SongLikeResponse> {
+    await this.assertActiveSongExists(id);
+    await this.prisma.songLike.upsert({
+      where: { deviceId_songId: { deviceId, songId: id } },
+      update: {},
+      create: { deviceId, songId: id },
+    });
+
+    return { songId: Number(id), deviceId, liked: true };
+  }
+
+  async unlike(id: bigint, deviceId: string): Promise<SongLikeResponse> {
+    await this.prisma.songLike.deleteMany({ where: { songId: id, deviceId } });
+    return { songId: Number(id), deviceId, liked: false };
   }
 
   async create(dto: SongUpsertDto): Promise<SongResponse> {
@@ -167,6 +218,16 @@ export class SongService {
 
   private async assertExists(id: bigint): Promise<void> {
     const exists = await this.prisma.song.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) {
+      throw new NotFoundException(`Song not found: ${id}`);
+    }
+  }
+
+  private async assertActiveSongExists(id: bigint): Promise<void> {
+    const exists = await this.prisma.song.findFirst({
+      where: { id, isActive: true },
+      select: { id: true },
+    });
     if (!exists) {
       throw new NotFoundException(`Song not found: ${id}`);
     }

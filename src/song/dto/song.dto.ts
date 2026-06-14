@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class SongUpsertDto {
   @IsString()
@@ -60,4 +60,18 @@ export class SearchDto extends PaginationDto {
   @IsString()
   @IsNotEmpty()
   q!: string;
+}
+
+export class SongLikeDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  deviceId!: string;
+}
+
+export class LikedSongsQueryDto extends PaginationDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  deviceId!: string;
 }

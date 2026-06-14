@@ -1,6 +1,13 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common';
 import { Public } from '../common/decorators/public.decorator';
-import { PaginationDto, SearchDto, SongOrderDto, SongUpsertDto } from './dto/song.dto';
+import {
+  LikedSongsQueryDto,
+  PaginationDto,
+  SearchDto,
+  SongLikeDto,
+  SongOrderDto,
+  SongUpsertDto,
+} from './dto/song.dto';
 import { SongService } from './song.service';
 
 @Controller('api/v1')
@@ -26,6 +33,12 @@ export class SongController {
   }
 
   @Public()
+  @Get('songs/liked')
+  liked(@Query() query: LikedSongsQueryDto) {
+    return this.songs.likedByDevice(query.deviceId, query.page, query.size);
+  }
+
+  @Public()
   @Get('songs/:id')
   get(@Param('id', ParseIntPipe) id: number) {
     return this.songs.get(BigInt(id));
@@ -36,6 +49,18 @@ export class SongController {
   async play(@Param('id', ParseIntPipe) id: number): Promise<null> {
     await this.songs.incrementPlayCount(BigInt(id));
     return null;
+  }
+
+  @Public()
+  @Post('songs/:id/like')
+  like(@Param('id', ParseIntPipe) id: number, @Body() dto: SongLikeDto) {
+    return this.songs.like(BigInt(id), dto.deviceId);
+  }
+
+  @Public()
+  @Delete('songs/:id/like')
+  unlike(@Param('id', ParseIntPipe) id: number, @Query() query: SongLikeDto) {
+    return this.songs.unlike(BigInt(id), query.deviceId);
   }
 
   @Post('admin/songs')

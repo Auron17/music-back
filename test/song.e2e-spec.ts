@@ -60,6 +60,44 @@ describe('Song E2E', () => {
     );
   });
 
+  it('likes, lists liked songs and unlikes by deviceId', async () => {
+    const songId = await createSong('Favorite Song');
+    const deviceId = 'device-test-001';
+
+    let res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/songs/${songId}/like`,
+      payload: { deviceId },
+    });
+    expect(res.statusCode).toBe(201);
+    expect((JSON.parse(res.payload) as { data: { liked: boolean } }).data.liked).toBe(true);
+
+    res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/songs/liked?deviceId=${deviceId}`,
+    });
+    const likedBody = JSON.parse(res.payload) as {
+      data: { content: Array<{ id: number; title: string }> };
+    };
+    expect(likedBody.data.content).toHaveLength(1);
+    expect(likedBody.data.content[0].id).toBe(songId);
+
+    res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/songs/${songId}/like?deviceId=${deviceId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect((JSON.parse(res.payload) as { data: { liked: boolean } }).data.liked).toBe(false);
+
+    res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/songs/liked?deviceId=${deviceId}`,
+    });
+    expect(
+      (JSON.parse(res.payload) as { data: { content: Array<{ id: number }> } }).data.content,
+    ).toHaveLength(0);
+  });
+
   it('create without auth returns 401', async () => {
     const res = await app.inject({
       method: 'POST',

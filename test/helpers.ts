@@ -47,6 +47,7 @@ export async function buildApp(): Promise<TestApp> {
 }
 
 export async function resetDb(prisma: PrismaService): Promise<void> {
+  await prisma.songLike.deleteMany();
   await prisma.song.deleteMany();
   await prisma.video.deleteMany();
   await prisma.album.deleteMany();
