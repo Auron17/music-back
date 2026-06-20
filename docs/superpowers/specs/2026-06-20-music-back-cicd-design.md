@@ -41,13 +41,14 @@ Set up GitHub Actions CI/CD for `music-back` mirroring the existing `westep-back
         ▼
 [SSH commands on VPS]
    1. cd $MUSIC_BACK_PROJECT_DIR
-   2. npm ci                                       # install all deps (dev included, for ts-node)
-   3. npx prisma generate                          # generate client for server platform
-   4. npx prisma migrate reset --force --skip-seed # ⚠️ DROPS DB and re-applies all migrations
-   5. npm run prisma:seed                          # re-create admin + default artist
-   6. tmux kill-session -t music-back (if exists)
-   7. tmux new-session -d -s music-back "node dist/src/main.js >> app.log 2>&1"
-   8. Verify process up, print last log lines
+   2. pm2 stop artist-api                          # quiesce before destructive DB op
+   3. npm ci                                       # install all deps (dev included, for ts-node)
+   4. npx prisma generate                          # generate client for server platform
+   5. npx prisma migrate reset --force --skip-seed # ⚠️ DROPS DB and re-applies all migrations
+   6. npm run prisma:seed                          # re-create admin + default artist
+   7. pm2 restart artist-api --update-env (or first-time `pm2 start dist/src/main.js --name artist-api`)
+   8. pm2 save                                     # persist for reboot
+   9. Verify process online via `pm2 describe`, print last log lines
 
 **⚠️ Destructive policy:** every deploy wipes the database. All songs, albums, videos, and uploaded media references are lost. The `uploads/` folder on disk is NOT cleaned, so files become orphaned. This is intentional per project owner's request.
         │
@@ -59,12 +60,13 @@ Set up GitHub Actions CI/CD for `music-back` mirroring the existing `westep-back
 
 | Element | westep-backend | music-back |
 |---|---|---|
-| Tmux session | `westep` | `music-back` |
+| Process manager | tmux session `westep` | **PM2 process `artist-api`** (server already uses PM2) |
 | Build tool | Maven | npm + nest CLI |
 | Artifact | single `.jar` | `dist/` + `prisma/` + package files |
-| Run command | `java -jar westepBackend-0.0.1-SNAPSHOT.jar` | `node dist/src/main.js` |
-| Restart | `tmux kill-session` + new | same |
-| New step | n/a | `prisma migrate deploy` + `prisma:seed` |
+| Run command | `java -jar westepBackend-0.0.1-SNAPSHOT.jar` | `node dist/src/main.js` (via PM2) |
+| Restart | `tmux kill-session` + new | `pm2 restart artist-api --update-env` |
+| Auto-restart on crash / reboot | no (tmux dies if process exits) | yes (PM2 + `pm2 save`) |
+| New step | n/a | `pm2 stop` → reset DB → seed → `pm2 restart` |
 | Port | westep's port | `4040` (from `.env`) |
 
 ## GitHub Secrets

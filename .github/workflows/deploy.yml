@@ -70,6 +70,10 @@ jobs:
             echo "✅ .env joyida"
             echo ""
 
+            # App'ni to'xtatish (DB reset paytida aktiv ulanishlar bo'lmasligi uchun)
+            echo "⏸️ PM2 stop artist-api..."
+            pm2 stop artist-api 2>/dev/null || true
+
             # Bog'liqliklarni o'rnatish (native binding'lar uchun server platformasida)
             echo "📚 npm ci..."
             npm ci
@@ -86,44 +90,37 @@ jobs:
             echo "🌱 prisma seed..."
             npm run prisma:seed
 
-            # Eski tmux session'ni o'chirish
+            # PM2 restart (yoki birinchi marta bo'lsa start)
             echo ""
-            echo "🧹 Eski tmux session'ni tozalash..."
-            if tmux has-session -t music-back 2>/dev/null; then
-              echo "  Eski session topildi, o'chiryapmiz..."
-              tmux kill-session -t music-back 2>/dev/null || true
-              sleep 2
+            echo "🚀 PM2 start/restart..."
+            if pm2 describe artist-api > /dev/null 2>&1; then
+              echo "  Mavjud process topildi, restart qilamiz..."
+              pm2 restart artist-api --update-env
+            else
+              echo "  Process topilmadi, yangi start qilamiz..."
+              pm2 start dist/src/main.js --name artist-api
             fi
 
-            # Yangi session yaratish
-            echo ""
-            echo "🚀 Yangi tmux session yaratyapmiz..."
-            tmux new-session -d -s music-back "cd ${{ secrets.MUSIC_BACK_PROJECT_DIR }} && node dist/src/main.js >> app.log 2>&1"
-            echo "✅ Session yaratildi"
+            # Reboot uchun PM2 state'ni saqlash
+            pm2 save
 
             sleep 3
             echo ""
-            echo "🔍 Natijalarni tekshirish..."
+            echo "🔍 PM2 status:"
+            pm2 status
 
-            if tmux has-session -t music-back 2>/dev/null; then
-              echo "✅ Tmux session ishlamoqda"
-
-              NODE_PID=$(pgrep -f 'dist/src/main.js' | head -n 1)
-              if [ ! -z "$NODE_PID" ]; then
-                echo "✅ Node process ishlamoqda (PID: $NODE_PID)"
-                echo ""
-                echo "📊 So'nggi loglar:"
-                tail -n 15 app.log
-                echo ""
-                echo "✅ Deploy muvaffaqiyatli yakunlandi!"
-              else
-                echo "⚠️ Node process topilmadi, biroz kuting..."
-                sleep 5
-                tail -n 30 app.log
-                exit 1
-              fi
-            else
-              echo "❌ Tmux session ishga tushmadi!"
-              tail -n 50 app.log
+            # Online ekanini tekshirish
+            if ! pm2 describe artist-api | grep -q "status.*online"; then
+              echo ""
+              echo "❌ artist-api online emas!"
+              pm2 logs artist-api --lines 30 --nostream || true
               exit 1
             fi
+
+            echo ""
+            echo "✅ artist-api online"
+            echo ""
+            echo "📊 So'nggi loglar:"
+            pm2 logs artist-api --lines 15 --nostream || true
+            echo ""
+            echo "✅ Deploy muvaffaqiyatli yakunlandi!"
