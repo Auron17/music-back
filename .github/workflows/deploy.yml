@@ -1,0 +1,129 @@
+name: CI/CD - Music Back
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Kodni yuklash
+        uses: actions/checkout@v4
+
+      - name: 📦 Node 20 o'rnatish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: 📚 Bog'liqliklarni o'rnatish
+        run: npm ci
+
+      - name: ⚙️ Prisma client generatsiya
+        run: npx prisma generate
+
+      - name: 🏗️ NestJS build
+        run: npm run build
+
+      - name: 🔐 Build artefaktlarini serverga yuborish
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.PRIVATE_KEY }}
+          source: "dist/,prisma/,package.json,package-lock.json"
+          target: "${{ secrets.MUSIC_BACK_PROJECT_DIR }}"
+
+      - name: 🚀 Serverda restart qilish
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.PRIVATE_KEY }}
+          script: |
+            #!/bin/bash
+            set -e
+
+            cd ${{ secrets.MUSIC_BACK_PROJECT_DIR }}
+
+            echo "📍 Joriy direktoriya: $(pwd)"
+            echo ""
+
+            # Build artefaktini tekshirish
+            if [ ! -d "dist" ]; then
+              echo "❌ dist papkasi topilmadi!"
+              ls -la
+              exit 1
+            fi
+            echo "✅ Build artefaktlari joyida"
+            echo ""
+
+            # .env mavjudligini tekshirish
+            if [ ! -f ".env" ]; then
+              echo "❌ .env fayl topilmadi!"
+              exit 1
+            fi
+            echo "✅ .env joyida"
+            echo ""
+
+            # Bog'liqliklarni o'rnatish (native binding'lar uchun server platformasida)
+            echo "📚 npm ci..."
+            npm ci
+
+            # Prisma client (server'ning Node versiyasi uchun)
+            echo "⚙️ prisma generate..."
+            npx prisma generate
+
+            # ⚠️ DB to'liq reset - har deploy'da hamma ma'lumot o'chadi
+            echo "💥 prisma migrate reset (DB tozalanyapti)..."
+            npx prisma migrate reset --force --skip-seed
+
+            # Seed - admin + default artist qaytadan yaratiladi
+            echo "🌱 prisma seed..."
+            npm run prisma:seed
+
+            # Eski tmux session'ni o'chirish
+            echo ""
+            echo "🧹 Eski tmux session'ni tozalash..."
+            if tmux has-session -t music-back 2>/dev/null; then
+              echo "  Eski session topildi, o'chiryapmiz..."
+              tmux kill-session -t music-back 2>/dev/null || true
+              sleep 2
+            fi
+
+            # Yangi session yaratish
+            echo ""
+            echo "🚀 Yangi tmux session yaratyapmiz..."
+            tmux new-session -d -s music-back "cd ${{ secrets.MUSIC_BACK_PROJECT_DIR }} && node dist/src/main.js >> app.log 2>&1"
+            echo "✅ Session yaratildi"
+
+            sleep 3
+            echo ""
+            echo "🔍 Natijalarni tekshirish..."
+
+            if tmux has-session -t music-back 2>/dev/null; then
+              echo "✅ Tmux session ishlamoqda"
+
+              NODE_PID=$(pgrep -f 'dist/src/main.js' | head -n 1)
+              if [ ! -z "$NODE_PID" ]; then
+                echo "✅ Node process ishlamoqda (PID: $NODE_PID)"
+                echo ""
+                echo "📊 So'nggi loglar:"
+                tail -n 15 app.log
+                echo ""
+                echo "✅ Deploy muvaffaqiyatli yakunlandi!"
+              else
+                echo "⚠️ Node process topilmadi, biroz kuting..."
+                sleep 5
+                tail -n 30 app.log
+                exit 1
+              fi
+            else
+              echo "❌ Tmux session ishga tushmadi!"
+              tail -n 50 app.log
+              exit 1
+            fi

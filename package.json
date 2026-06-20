@@ -7,7 +7,7 @@
     "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/src/main.js",
-    "render:build": "prisma generate && nest build",
+    "render:build": "prisma generate && prisma migrate deploy && ts-node prisma/seed.ts && nest build",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
